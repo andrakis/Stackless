@@ -357,7 +357,7 @@ void BFTest() {
 		for (auto it = threads.begin(); it != threads.end(); ++it) {
 			BFImplementation &impl = *it;
 			if (impl.isResolved())
-				break;
+				continue;
 			++threads_run;
 			for (int cycle_count = cycles; cycle_count > 0; --cycle_count) {
 				// Execution cycle
