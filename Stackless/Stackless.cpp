@@ -10,9 +10,11 @@ namespace stackless {
 }
 
 void BFTest();
+unsigned scheme_complete_test();
 int main()
 {
 	BFTest();
+	scheme_complete_test();
     return 0;
 }
 

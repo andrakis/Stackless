@@ -41,5 +41,8 @@
     <ClCompile Include="samples\Brainfck.cpp">
       <Filter>Source Files\samples</Filter>
     </ClCompile>
+    <ClCompile Include="samples\Scheme.cpp">
+      <Filter>Source Files\samples</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>
