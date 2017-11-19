@@ -18,6 +18,21 @@ Additionally, Stackless aims to provide the following benefits:
 Current Status
 --------------
 
+***Version: 0.20*** **Cleanup release**
+
+***Implemented:***
+
+* Microthreading processes
+
+* Basic process management
+
+* Cleaned up types
+
+* Added shared pointer usage
+
+Changelog
+---------
+
 ***Version: 0.10*** **First release**
 
 ***Implemented:***

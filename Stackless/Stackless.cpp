@@ -3,6 +3,11 @@
 
 #include "stdafx.h"
 
+namespace stackless {
+	namespace microthreading {
+		thread_id thread_counter = 0;
+	}
+}
 
 void BFTest();
 int main()
