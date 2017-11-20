@@ -148,7 +148,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="samples\Brainfck.cpp" />
-    <ClCompile Include="samples\Scheme.cpp" />
+    <ClCompile Include="samples\SchemeReference.cpp" />
     <ClCompile Include="Stackless.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
