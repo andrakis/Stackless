@@ -38,9 +38,9 @@ typedef BFList::const_iterator BFList_const_iterator;
 // Must be a power of 2
 const size_t BFMEMSIZE = 1 << 15; // 32768
 
-typedef StacklessInstructionConverter<BFCell, BFOperations> BFInstructionConverter;
+typedef InstructionConverter<BFCell, BFOperations> BFInstructionConverter;
 
-struct BFEnvironment : public StacklessEnvironment<BFList> {
+struct BFEnvironment : public Environment<BFList> {
 	typedef typename std::shared_ptr<BFEnvironment> env_p;
 
 	BFEnvironment(env_p outer = nullptr, const typename BFList::size_type memsize = BFMEMSIZE)
@@ -101,7 +101,7 @@ private:
 typedef unsigned BFArgs;
 typedef unsigned BFArgsSize;
 
-typedef StacklessFrame<BFCell, BFOperations, BFEnvironment> BFStacklessFrame;
+typedef Frame<BFCell, BFOperations, BFEnvironment> BFStacklessFrame;
 
 struct BFFrame : public BFStacklessFrame {
 	BFFrame(env_p environment) : BFStacklessFrame(environment) {}
@@ -123,9 +123,9 @@ struct BFFrame : public BFStacklessFrame {
 	}
 };
 
-struct BFImplementation : public StacklessImplementation<BFEnvironment,BFFrame> {
+struct BFImplementation : public Implementation<BFEnvironment,BFFrame> {
 	// Create the single frame we'll reuse throughout execution
-	BFImplementation(env_p _env) : StacklessImplementation(_env), frame(BFFrame(_env)) {
+	BFImplementation(env_p _env) : Implementation(_env), frame(BFFrame(_env)) {
 	}
 	BFFrame &getCurrentFrame() {
 		return frame;

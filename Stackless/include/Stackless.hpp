@@ -15,14 +15,14 @@ namespace stackless {
 	};
 
 	template<typename From, typename To>
-	struct StacklessInstructionConverter {
+	struct InstructionConverter {
 		static To convert(const From &cell) {
 			return (To)cell;
 		}
 	};
 
 	template<typename ListType>
-	struct StacklessEnvironment {
+	struct Environment {
 		typedef typename ListType::value_type value_type;
 		typedef typename ListType::size_type size_type;
 
@@ -30,17 +30,16 @@ namespace stackless {
 	};
 
 	template<typename CellType, typename OperationType, typename EnvironmentType>
-	struct StacklessFrame {
+	struct Frame {
 		typedef typename CellType cell_type;
 		typedef typename OperationType operation_type;
 		typedef typename EnvironmentType env_type;
 		typedef typename EnvironmentType::env_p env_p;
-		typedef typename StacklessFrame<CellType,OperationType,EnvironmentType> Frame;
 		typedef std::list<CellType> StacklessFrameArguments;
 		
-		StacklessFrame(env_p environment) : env(environment) {
+		Frame(env_p environment) : env(environment) {
 		}
-		virtual ~StacklessFrame() {
+		virtual ~Frame() {
 		}
 
 		virtual bool isResolved() const = 0;
@@ -55,14 +54,14 @@ namespace stackless {
 	};
 
 	template<typename EnvironmentType,typename FrameType>
-	struct StacklessImplementation {
+	struct Implementation {
 		typedef typename FrameType frame_type;
 		typedef typename FrameType::cell_type cell_type;
 		typedef typename FrameType::operation_type operation_type;
 		typedef typename FrameType::env_type env_type;
 		typedef typename FrameType::env_p env_p;
 
-		StacklessImplementation(env_p _env) : env(_env) {
+		Implementation(env_p _env) : env(_env) {
 		}
 
 		env_p env;
