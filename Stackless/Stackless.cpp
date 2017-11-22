@@ -9,12 +9,21 @@ namespace stackless {
 	}
 }
 
-void BFTest();
-unsigned scheme_complete_test();
+namespace implementations {
+	namespace brainfck {
+		void BFTest();
+	}
+}
+namespace references {
+	namespace scheme {
+		unsigned scheme_complete_test();
+	}
+}
+
 int main()
 {
-	BFTest();
-	scheme_complete_test();
+	implementations::brainfck::BFTest();
+	references::scheme::scheme_complete_test();
     return 0;
 }
 

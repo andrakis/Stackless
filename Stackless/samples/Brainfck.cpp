@@ -17,6 +17,8 @@ using namespace stackless;
 using namespace stackless::microthreading;
 using namespace stackless::timekeeping;
 
+namespace implementations {
+namespace brainfck {
 
 enum BFOperations {
 	InvalidOperation,
@@ -38,7 +40,12 @@ typedef BFList::const_iterator BFList_const_iterator;
 // Must be a power of 2
 const size_t BFMEMSIZE = 1 << 15; // 32768
 
-typedef InstructionConverter<BFCell, BFOperations> BFInstructionConverter;
+//typedef InstructionConverter<BFCell, BFOperations> BFInstructionConverter;
+struct BFInstructionConverter : public InstructionConverter<BFCell, BFOperations> {
+	static _instruction_type convert(_cell_type cell) {
+		return (_instruction_type)cell;
+	}
+};
 
 struct BFEnvironment : public Environment<BFList> {
 	typedef typename std::shared_ptr<BFEnvironment> env_p;
@@ -67,21 +74,21 @@ struct BFEnvironment : public Environment<BFList> {
 		}
 	}
 
-	typename size_type ipValue() const {
+	typename _size_type ipValue() const {
 		return wrap(ip);
 	}
-	typename size_type mpValue() const {
+	typename _size_type mpValue() const {
 		return wrap(mp);
 	}
-	typename size_type ip = 0;
-	typename size_type mp = 0;
+	typename _size_type ip = 0;
+	typename _size_type mp = 0;
 
-	typename size_type wrap(const typename size_type pos) const {
+	typename _size_type wrap(const typename _size_type pos) const {
 		// _memsize_max is length of _mem -1.
 		return pos & _memsize_max;
 	}
 
-	size_type mem_size() const {
+	_size_type mem_size() const {
 		return _memsize_max + 1;
 	}
 	typename code_type::size_type code_size() const {
@@ -93,7 +100,7 @@ struct BFEnvironment : public Environment<BFList> {
 
 private:
 	env_p _outer;
-	typename size_type _memsize_max;
+	typename _size_type _memsize_max;
 
 };
 
@@ -310,3 +317,5 @@ struct BFInterpreterState {
 private:
 	BFEnvironment _top;
 };
+}
+}

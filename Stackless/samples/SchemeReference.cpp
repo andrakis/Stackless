@@ -11,6 +11,9 @@
 #include <list>
 #include <map>
 
+namespace references {
+namespace scheme {
+
 // return given mumber as a string
 std::string str(long n) { std::ostringstream os; os << n; return os.str(); }
 
@@ -411,4 +414,6 @@ unsigned scheme_complete_test() {
 		<< ", total failures " << g_fault_count
 		<< "\n";
 	return g_fault_count ? EXIT_FAILURE : EXIT_SUCCESS;
+}
+}
 }

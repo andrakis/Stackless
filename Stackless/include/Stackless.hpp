@@ -16,24 +16,30 @@ namespace stackless {
 
 	template<typename From, typename To>
 	struct InstructionConverter {
-		static To convert(const From &cell) {
-			return (To)cell;
-		}
+		typedef const typename From &_cell_type;
+		typedef typename To _instruction_type;
+		//virtual static _instruction_type convert(_cell_type) const = 0;
+	};
+
+	template<typename InstructionType>
+	struct Dispatcher {
+		typedef typename InstructionType::_cell_type _cell_type;
+		typedef typename InstructionType::_instruction_type _instruction_type;
 	};
 
 	template<typename ListType>
 	struct Environment {
-		typedef typename ListType::value_type value_type;
-		typedef typename ListType::size_type size_type;
+		typedef typename ListType::value_type _value_type;
+		typedef typename ListType::size_type _size_type;
 
-		typename value_type value;
+		typename _value_type value;
 	};
 
 	template<typename CellType, typename OperationType, typename EnvironmentType>
 	struct Frame {
-		typedef typename CellType cell_type;
-		typedef typename OperationType operation_type;
-		typedef typename EnvironmentType env_type;
+		typedef typename CellType _cell_type;
+		typedef typename OperationType _operation_type;
+		typedef typename EnvironmentType _env_type;
 		typedef typename EnvironmentType::env_p env_p;
 		typedef std::list<CellType> StacklessFrameArguments;
 		
@@ -45,7 +51,7 @@ namespace stackless {
 		virtual bool isResolved() const = 0;
 		virtual bool isArgumentsResolved() const = 0;
 
-		virtual OperationType fetch() = 0;
+		//virtual OperationType fetch() = 0;
 		virtual void execute() = 0;
 
 		env_p env;
@@ -55,10 +61,10 @@ namespace stackless {
 
 	template<typename EnvironmentType,typename FrameType>
 	struct Implementation {
-		typedef typename FrameType frame_type;
-		typedef typename FrameType::cell_type cell_type;
-		typedef typename FrameType::operation_type operation_type;
-		typedef typename FrameType::env_type env_type;
+		typedef typename FrameType _frame_type;
+		typedef typename FrameType::_cell_type _cell_type;
+		typedef typename FrameType::_operation_type _operation_type;
+		typedef typename FrameType::_env_type _env_type;
 		typedef typename FrameType::env_p env_p;
 
 		Implementation(env_p _env) : env(_env) {
@@ -87,18 +93,18 @@ namespace stackless {
 
 		typedef unsigned CycleCount;
 
-		const CycleCount cycles_low = 10;
-		const CycleCount cycles_med = 100;
-		const CycleCount cycles_hi = 1000;
+		const CycleCount cycles_low = 1;
+		const CycleCount cycles_med = 10;
+		const CycleCount cycles_hi = 100;
 
 		typedef unsigned thread_id;
 		extern thread_id thread_counter;
 
 		template<typename Implementation>
 		struct Microthread {
-			typedef typename Microthread<Implementation> thread_type;
-			typedef typename Implementation::frame_type frame_type;
-			typedef typename Implementation::env_type env_type;
+			typedef typename Microthread<Implementation> _thread_type;
+			typedef typename Implementation::_frame_type _frame_type;
+			typedef typename Implementation::_env_type _env_type;
 			typedef typename std::shared_ptr<Implementation> impl_p;
 
 			Microthread(impl_p implementation, const CycleCount cycle_count = cycles_med)
@@ -110,9 +116,9 @@ namespace stackless {
 			impl_p impl;
 			CycleCount cycles;
 
-			typename frame_type &getCurrentFrame() { return impl->getCurrentFrame(); }
+			typename _frame_type &getCurrentFrame() { return impl->getCurrentFrame(); }
 			bool isResolved() { return getCurrentFrame().isResolved(); }
-			typename Implementation::cell_type getResult() const { return currentFrame().result; }
+			typename Implementation::_cell_type getResult() const { return currentFrame().result; }
 
 			void execute() {
 				for (CycleCount cycle = cycles; cycle > 0; --cycle) {
@@ -127,27 +133,27 @@ namespace stackless {
 			}
 
 			template<typename ArgType, class Callback>
-			static thread_type create(ArgType args, Callback cb) {
-				return thread_type(cb(args));
+			static _thread_type create(ArgType args, Callback cb) {
+				return _thread_type(cb(args));
 			}
 		};
 
 		template<typename Implementation>
 		struct MicrothreadManager {
-			typedef typename Microthread<Implementation> thread_type;
-			typedef typename thread_type::impl_p impl_p;
-			typedef typename Implementation::frame_type frame_type;
-			typedef typename Implementation::env_type env_type;
-			typedef typename std::shared_ptr<frame_type> frame_p;
-			typedef typename std::shared_ptr<env_type> env_p;
-			typedef typename std::vector<thread_type> threads_type;
+			typedef typename Microthread<Implementation> _thread_type;
+			typedef typename _thread_type::impl_p impl_p;
+			typedef typename Implementation::_frame_type _frame_type;
+			typedef typename Implementation::_env_type _env_type;
+			typedef typename std::shared_ptr<_frame_type> frame_p;
+			typedef typename std::shared_ptr<_env_type> env_p;
+			typedef typename std::vector<_thread_type> _threads_type;
 
 			MicrothreadManager() : threads() {
 			}
 
 			template<typename ArgType, class Callback>
 			thread_id start(ArgType args, Callback cb) {
-				thread_type thread(thread_type::create<ArgType, Callback>(args, cb));
+				_thread_type thread(_thread_type::create<ArgType, Callback>(args, cb));
 				threads.push_back(thread);
 				return thread.thread_id;
 			}
@@ -155,7 +161,7 @@ namespace stackless {
 			int executeThreads() {
 				int threads_run = 0;
 				for (auto it = threads.begin(); it != threads.end(); ++it) {
-					thread_type &thread = *it;
+					_thread_type &thread = *it;
 					if (thread.isResolved())
 						continue;
 					++threads_run;
@@ -170,7 +176,7 @@ namespace stackless {
 			}
 
 		private:
-			threads_type threads;
+			_threads_type threads;
 		};
 	}
 
