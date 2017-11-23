@@ -239,7 +239,9 @@ cell eval(cell x, environment * env)
 		// *Although the environmet existed at the time the lambda was defined
 		// it wasn't necessarily complete - it may have subsequently had
 		// more symbols defined in that environment.
-		return eval(/*body*/proc.list[2], new environment(/*parms*/proc.list[1].list, /*args*/exps, proc.env));
+		return eval(/*body*/proc.list[2],
+			new environment(/*parms*/proc.list[1].list,
+				/*args*/exps, proc.env));
 	} else if (proc.type == Proc)
 		return proc.proc(exps);
 

@@ -35,6 +35,7 @@ struct cell {
 	cell_type type; std::string val; std::vector<cell> list; proc_type proc; env_p env;
 	cell(cell_type type = Symbol) : type(type), env(nullptr) {}
 	cell(cell_type type, const std::string & val) : type(type), val(val), env(nullptr) {}
+	cell(const std::vector<cell> &cells) : type(List), list(cells) {}
 	cell(proc_type proc) : type(Proc), proc(proc), env(nullptr) {}
 };
 
@@ -53,6 +54,7 @@ namespace instruction {
 		Define,
 		Lambda,
 		Begin,
+		Proc,
 		Invalid
 	};
 }
@@ -60,14 +62,20 @@ namespace instruction {
 struct SchemeInstructionConverter
 	: public InstructionConverter<typename cell, typename instruction::instruction> {
 	static _instruction_type convert(_cell_type value) {
-		if (value.type != Symbol)
-			return instruction::Invalid;
-		else if (value.val == "quote") return instruction::Quote;
-		else if (value.val == "if") return instruction::If;
-		else if (value.val == "set!") return instruction::Set;
-		else if (value.val == "define") return instruction::Define;
-		else if (value.val == "lambda") return instruction::Lambda;
-		else if (value.val == "begin") return instruction::Begin;
+		switch (value.type) {
+			// These two are handled by the Proc dispatcher
+		case Lambda:
+		case Proc:
+			return instruction::Proc;
+		case Symbol:
+			if (value.val == "quote") return instruction::Quote;
+			if (value.val == "if") return instruction::If;
+			if (value.val == "set!") return instruction::Set;
+			if (value.val == "define") return instruction::Define;
+			if (value.val == "lambda") return instruction::Lambda;
+			if (value.val == "begin") return instruction::Begin;
+			break;
+		}
 		return instruction::Invalid;
 	}
 };
@@ -116,20 +124,28 @@ private:
 
 // frame implementation
 struct SchemeFrame : public Frame<typename cell, typename std::string, typename environment> {
-	SchemeFrame(const cells &exps, env_p environment)
+	SchemeFrame(const cell &expression, env_p environment)
 		: Frame(environment),
-		exp(Symbol, "nil"),
-		expressions(exps),
+		exp(expression),
+		expressions(),
 		arguments(),
 		resolved_arguments(),
 		exp_it(expressions.cbegin()),
 		arg_it(arguments.cbegin()),
 		resolved(false),
-		subframe(nullptr)
+		subframe(nullptr),
+		subframe_mode(None)
 	{
-		if(!expressions.empty())
-			setExpression(*exp_it);
+		expressions.push_back(exp);
+		exp_it = expressions.cbegin();
+		setExpression(exp);
 	}
+
+	enum SubframeMode {
+		None,
+		Argument,
+		Procedure
+	};
 
 	bool isResolved() const { return resolved; }
 	bool isArgumentsResolved() const { return true; }
@@ -141,23 +157,39 @@ struct SchemeFrame : public Frame<typename cell, typename std::string, typename 
 	 *  A) have subframe?
 	 *    A=t      B) execute subframe
 	 *      .      C) subframe resolved?
-	 *      .  C=t D)   push frame result
-	 *      .    . E)   delete subframe
-	 *      .    . F)   goto Y
-	 *      .  C=f G) goto Z
-	 *    A=f      H) arg_it == arguments.end()
-	 *      .  H=t I)   dispatch()
-	 *      .    . J)   goto Z
-	 *  Y) nextArgument()
+	 *      .  C=t D) subframe_mode
+	 *      .  C=t D=Argument  E) resolved_arguments.push(frame.result)
+	 *      .    .   .         F) nextArgument()
+	 *      .    .   .         G) goto L
+	 *      .  C=t D=Procedure H) result = frame.result
+	 *      .    .   .         I) nextExpression()
+	 *      .    .   .         J) goto L
+	 *      .  C=t D=*         K) error()
+	 *      .    . L) delete subframe
+	 *      .  C=* K) goto Z
+	 *    A=f      L) arg_it == arguments.end()
+	 *      .  H=t M)   dispatch()
+	 *      .    . N)   goto Z
 	 *  Z) done.
 	 */
 	void execute() {
 		if (subframe != nullptr) {
 			subframe->execute();
 			if (subframe->isResolved()) {
-				resolved_arguments.push_back(subframe->result);
+				switch (subframe_mode) {
+				case Argument:
+					resolved_arguments.push_back(subframe->result);
+					nextArgument();
+					break;
+				case Procedure:
+					result = subframe->result;
+					nextExpression();
+					break;
+				default:
+					throw std::runtime_error("Invalid subframe mode None");
+				}
 				delete subframe;
-				nextArgument();
+				subframe_mode = None;
 			}
 		else if (arg_it == arguments.cend())
 			dispatch();
@@ -223,7 +255,8 @@ struct SchemeFrame : public Frame<typename cell, typename std::string, typename 
 			// parent env to lambda
 			envptr = env_p(new environment(first.env));
 		}
-		subframe = new SchemeFrame(value.list, envptr);
+		subframe = new SchemeFrame(value, envptr);
+		subframe_mode = Argument;
 		return false;
 	}
 
@@ -231,7 +264,11 @@ struct SchemeFrame : public Frame<typename cell, typename std::string, typename 
 		return env->find(symbol)[symbol];
 	}
 
-	void dispatch();
+	bool dispatchCall();
+	void dispatch() {
+		if (dispatchCall())
+			nextExpression();
+	}
 
 	bool resolveExpression(const cell &value) {
 		switch (value.type) {
@@ -263,7 +300,7 @@ struct SchemeFrame : public Frame<typename cell, typename std::string, typename 
 					resolved_arguments.push_back(*it); ++it;
 					// [alt]
 					if (it != value.list.cend())
-						resolved_arguments.push_back(value.list[2]);
+						resolved_arguments.push_back(*it);
 					else
 						resolved_arguments.push_back(nil);
 					return false;
@@ -280,11 +317,11 @@ struct SchemeFrame : public Frame<typename cell, typename std::string, typename 
 					return false;
 				} else if (first.val == "lambda") { // (lambda (var*) exp)
 					result = value;
-					result.type = cell_type::Lambda;
+					result.type = Lambda;
 					result.env = env;
 					return true;
 				} else if (first.val == "begin") {  // (begin exp*)
-					arguments = cells(value.list.cbegin() + 1, value.list.cend());
+					resolved_arguments = cells(value.list.cbegin() + 1, value.list.cend());
 					return true;
 				}
 				// (proc exp*)
@@ -299,7 +336,6 @@ struct SchemeFrame : public Frame<typename cell, typename std::string, typename 
 	}
 
 	cell exp;
-private:
 	cells expressions;
 	cells arguments;
 	cells resolved_arguments;
@@ -307,18 +343,19 @@ private:
 	typename cells::const_iterator arg_it;
 	bool resolved;
 	SchemeFrame *subframe;
+	SubframeMode subframe_mode;
 };
 
 
 
 template<typename instruction::instruction Instruction> struct SchemeDispatcher {
-	static void dispatch(SchemeFrame &frame, cells::const_iterator args) {
+	static bool dispatch(SchemeFrame &frame, cells::const_iterator args) {
 		throw stackless::InvalidOperation<typename instruction::instruction, int, int>(Instruction, 0, 0);
 	}
 };
 
 template<> struct SchemeDispatcher<instruction::If> {
-	static void dispatch(SchemeFrame &frame, cells::const_iterator it) {
+	static bool dispatch(SchemeFrame &frame, cells::const_iterator it) {
 		const cell &conseq = *it; ++it;
 		const cell &alt = *it; ++it;
 		const cell &test = *it; ++it;
@@ -334,22 +371,93 @@ template<> struct SchemeDispatcher<instruction::If> {
 				// Update our expression without moving exp it
 				frame.exp = if_result;
 				frame.setExpression(frame.exp);
+				return false;
 			}
 			break;
 		default:
 			frame.result = if_result;
 			break;
 		}
+		// Move exp_it
+		return true;
 	}
 };
 
-void SchemeFrame::dispatch() {
+template<> struct SchemeDispatcher<instruction::Begin> {
+	static bool dispatch(SchemeFrame &frame, cells::const_iterator it) {
+		// Update expressions to call list
+		frame.expressions.swap(frame.resolved_arguments);
+		frame.resolved_arguments.clear();
+		frame.exp_it = frame.expressions.cbegin();
+		frame.setExpression(*frame.exp_it);
+		// Don't move exp_it
+		return false;
+	}
+};
+
+template<> struct SchemeDispatcher<instruction::Proc> {
+	static bool dispatch(SchemeFrame &frame, cells::const_iterator it) {
+		switch (frame.exp.type) {
+			// Proc: a builtin procedure in C++
+			// We call this immediately. If it blocks, that is up
+			// to the caller.
+		case Proc:
+			frame.result = frame.exp.proc(frame.resolved_arguments);
+			return true;
+			// Lambda: a Scheme procedure
+			// We create a subframe to run the procedure, along with
+			// an environment with arguments set to correct values.
+		case Lambda:
+		{
+			// Arguments
+			const cell &arglist = *it; ++it;
+			cells arguments;
+			switch (arglist.type) {
+			case Symbol:
+			{
+				// Single argument, assign all args as list
+				arguments.push_back(arglist);
+				// Convert resolved arguments to single list
+				cells tmp(frame.resolved_arguments);
+				frame.resolved_arguments.clear();
+				frame.resolved_arguments.push_back(tmp);
+				break;
+			}
+			case List:
+				// List of arguments
+				arguments = arglist.list;
+				break;
+			}
+			// Body
+			const cell body = *it; ++it;
+			// Create environment parented to lambda env and assign arguments
+			env_p new_env(new environment(frame.exp.env));
+			auto env_arg_it = arguments.cbegin();
+			auto res_arg_it = frame.resolved_arguments.cbegin();
+			for (; res_arg_it != arguments.cend(); ++env_arg_it, ++res_arg_it)
+				new_env->operator[](env_arg_it->val) = *res_arg_it;
+			// Create subframe
+			frame.subframe_mode = SchemeFrame::Procedure;
+			frame.subframe = new SchemeFrame(body, new_env);
+			return false;
+		}
+		default:
+			throw std::runtime_error("Dont know how to dispatch proc");
+		}
+	}
+};
+
+bool SchemeFrame::dispatchCall() {
 	// all of our arguments are now resolved, dispatch
 	cells::const_iterator it = resolved_arguments.cbegin();
 	instruction::instruction ins = SchemeInstructionConverter::convert(exp);
 	switch (ins) {
 	case instruction::If:
 		return SchemeDispatcher<instruction::If>::dispatch(*this, it);
+	case instruction::Begin:
+		return SchemeDispatcher<instruction::Begin>::dispatch(*this, it);
+	case instruction::Proc:
+		return SchemeDispatcher<instruction::Proc>::dispatch(*this, it);
 	default:
 		return SchemeDispatcher<instruction::Invalid>::dispatch(*this, it);
 	}
