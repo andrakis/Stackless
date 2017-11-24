@@ -13,6 +13,9 @@ namespace implementations {
 	namespace brainfck {
 		void BFTest();
 	}
+	namespace scheme {
+		void scheme_test();
+	}
 }
 namespace references {
 	namespace scheme {
@@ -24,6 +27,7 @@ int main()
 {
 	implementations::brainfck::BFTest();
 	references::scheme::scheme_complete_test();
+	implementations::scheme::scheme_test();
     return 0;
 }
 

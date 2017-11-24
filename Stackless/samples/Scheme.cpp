@@ -620,6 +620,9 @@ void add_globals(environment & env)
 	env["/"] = cell(&proc_div);      env[">"] = cell(&proc_greater);
 	env["<"] = cell(&proc_less);     env["<="] = cell(&proc_less_equal);
 }
+void add_globals(env_p env) {
+	add_globals(*env);
+}
 ////////////////////// parse, read and user interaction
 
 // convert given string to list of tokens
@@ -702,14 +705,14 @@ void repl(const std::string & prompt, env_p env)
 
 int scheme_main()
 {
-	env_p global_env; add_globals(*global_env);
+	env_p global_env(new environment()); add_globals(global_env);
 	repl("90> ", global_env);
 	return 0;
 }
 
 void scheme_test() {
 	std::string line;
-	env_p env; add_globals(*env);
+	env_p env(new environment()); add_globals(env);
 	eval(read("(define multiply-by (lambda (n) (lambda (y) (* y n))))"), env);
 	eval(read("(define doubler (multiply-by 2))"), env);
 	cell result = eval(read("(doubler 4)"), env);
@@ -741,7 +744,7 @@ void test_equal_(const T1 & value, const T2 & expected_value, const char * file,
 #define TEST(expr, expected_result) TEST_EQUAL(to_string(eval(read(expr), global_env)), expected_result)
 
 unsigned scheme_complete_test() {
-	env_p global_env; add_globals(*global_env);
+	env_p global_env(new environment()); add_globals(global_env);
 	// the 29 unit tests for lis.py
 	TEST("(quote (testing 1 (2.0) -3.14e159))", "(testing 1 (2.0) -3.14e159)");
 	TEST("(+ 2 2)", "4");
