@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <list>
+#include <map>
 #include <memory>
 #include <vector>
 
@@ -117,8 +118,12 @@ namespace stackless {
 			CycleCount cycles;
 
 			typename _frame_type &getCurrentFrame() { return impl->getCurrentFrame(); }
+			const typename _frame_type &getCurrentFrame() const { return impl->getCurrentFrame(); }
 			bool isResolved() { return getCurrentFrame().isResolved(); }
-			typename Implementation::_cell_type getResult() const { return currentFrame().result; }
+			typename Implementation::_cell_type getResult() const {
+				const _frame_type &frame = getCurrentFrame();
+				return frame.result;
+			}
 
 			void execute() {
 				for (CycleCount cycle = cycles; cycle > 0; --cycle) {
@@ -136,6 +141,17 @@ namespace stackless {
 			static _thread_type create(ArgType args, Callback cb) {
 				return _thread_type(cb(args));
 			}
+			template<class Callback>
+			static _thread_type create(Callback cb) {
+				return _thread_type(cb());
+			}
+		};
+		
+		enum Threading {
+			// Execute a single thread
+			Single,
+			// Execute multiple threads
+			Multi
 		};
 
 		template<typename Implementation>
@@ -146,7 +162,8 @@ namespace stackless {
 			typedef typename Implementation::_env_type _env_type;
 			typedef typename std::shared_ptr<_frame_type> frame_p;
 			typedef typename std::shared_ptr<_env_type> env_p;
-			typedef typename std::vector<_thread_type> _threads_type;
+			typedef typename std::map<thread_id,_thread_type> _threads_type;
+			typedef typename std::pair<thread_id,_thread_type> _threads_ele;
 
 			MicrothreadManager() : threads() {
 			}
@@ -154,14 +171,44 @@ namespace stackless {
 			template<typename ArgType, class Callback>
 			thread_id start(ArgType args, Callback cb) {
 				_thread_type thread(_thread_type::create<ArgType, Callback>(args, cb));
-				threads.push_back(thread);
+				threads.insert(_threads_ele(thread.thread_id, thread));
 				return thread.thread_id;
+			}
+			template<class Callback>
+			thread_id start(Callback cb) {
+				_thread_type thread(_thread_type::create<Callback>(cb));
+				threads.insert(_threads_ele(thread.thread_id, thread));
+				return thread.thread_id;
+			}
+
+			const _thread_type &getThread(const thread_id index) const {
+				return threads.find(index)->second;
+			}
+			_thread_type &getThread(const thread_id index) {
+				return threads.find(index)->second;
+			}
+			void remove_thread(const thread_id index) {
+				threads.erase(threads.find(index));
+			}
+
+			void runThreadToCompletion(const thread_id index, const Threading mode = Single) {
+				_thread_type &thread = threads.find(index)->second;
+				while (!thread.isResolved()) {
+					if(mode == Single)
+						// Run single thread
+						thread.execute();
+					else if(mode == Multi) {
+						// Run other threads
+						if (executeThreads() == 0)
+							break;
+					}
+				}
 			}
 
 			int executeThreads() {
 				int threads_run = 0;
 				for (auto it = threads.begin(); it != threads.end(); ++it) {
-					_thread_type &thread = *it;
+					_thread_type &thread = it->second;
 					if (thread.isResolved())
 						continue;
 					++threads_run;

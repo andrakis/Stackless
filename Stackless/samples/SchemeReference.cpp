@@ -370,7 +370,17 @@ void test_equal_(const T1 & value, const T2 & expected_value, const char * file,
 // evaluate the given Lisp expression and compare the result against the given expected_result
 #define TEST(expr, expected_result) TEST_EQUAL(to_string(eval(read(expr), &global_env)), expected_result)
 
+unsigned do_scheme_complete_test();
 unsigned scheme_complete_test() {
+	unsigned result;
+	auto duration = stackless::timekeeping::StacklessTimekeeper::measure([&result]() {
+		result = do_scheme_complete_test();
+	});
+	std::cout << "Reference Scheme tests completed in " << duration << "ms" << std::endl;
+	return result;
+}
+
+unsigned do_scheme_complete_test() {
 	environment global_env; add_globals(global_env);
 	// the 29 unit tests for lis.py
 	TEST("(quote (testing 1 (2.0) -3.14e159))", "(testing 1 (2.0) -3.14e159)");
