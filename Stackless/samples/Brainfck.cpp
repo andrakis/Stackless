@@ -48,7 +48,8 @@ struct BFInstructionConverter : public InstructionConverter<BFCell, BFOperations
 };
 
 struct BFEnvironment : public Environment<BFList> {
-	typedef typename std::shared_ptr<BFEnvironment> env_p;
+	typedef std::shared_ptr<BFEnvironment> env_p;
+	typedef env_p _env_p;
 
 	BFEnvironment(env_p outer = nullptr, const typename BFList::size_type memsize = BFMEMSIZE)
 	: _outer(outer), tape(memsize), _memsize_max(memsize - 1)
@@ -74,16 +75,16 @@ struct BFEnvironment : public Environment<BFList> {
 		}
 	}
 
-	typename _size_type ipValue() const {
+	_size_type ipValue() const {
 		return wrap(ip);
 	}
-	typename _size_type mpValue() const {
+	_size_type mpValue() const {
 		return wrap(mp);
 	}
-	typename _size_type ip = 0;
-	typename _size_type mp = 0;
+	_size_type ip = 0;
+	_size_type mp = 0;
 
-	typename _size_type wrap(const typename _size_type pos) const {
+	_size_type wrap(const _size_type pos) const {
 		// _memsize_max is length of _mem -1.
 		return pos & _memsize_max;
 	}
@@ -96,11 +97,11 @@ struct BFEnvironment : public Environment<BFList> {
 	}
 
 	BFList tape;
-	typename code_type code;
+	code_type code;
 
 private:
 	env_p _outer;
-	typename _size_type _memsize_max;
+	_size_type _memsize_max;
 
 };
 

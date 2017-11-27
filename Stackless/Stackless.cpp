@@ -5,7 +5,7 @@
 
 namespace stackless {
 	namespace microthreading {
-		thread_id thread_counter = 0;
+		ThreadId thread_counter = 0;
 	}
 }
 

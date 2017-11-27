@@ -17,8 +17,8 @@ namespace stackless {
 
 	template<typename From, typename To>
 	struct InstructionConverter {
-		typedef const typename From &_cell_type;
-		typedef typename To _instruction_type;
+		typedef const From &_cell_type;
+		typedef To _instruction_type;
 		//virtual static _instruction_type convert(_cell_type) const = 0;
 	};
 
@@ -33,15 +33,15 @@ namespace stackless {
 		typedef typename ListType::value_type _value_type;
 		typedef typename ListType::size_type _size_type;
 
-		typename _value_type value;
+		_value_type value;
 	};
 
 	template<typename CellType, typename OperationType, typename EnvironmentType>
 	struct Frame {
-		typedef typename CellType _cell_type;
-		typedef typename OperationType _operation_type;
-		typedef typename EnvironmentType _env_type;
-		typedef typename EnvironmentType::env_p env_p;
+		typedef CellType _cell_type;
+		typedef OperationType _operation_type;
+		typedef EnvironmentType _env_type;
+		typedef typename EnvironmentType::_env_p env_p;
 		typedef std::list<CellType> StacklessFrameArguments;
 		
 		Frame(env_p environment) : env(environment) {
@@ -62,7 +62,7 @@ namespace stackless {
 
 	template<typename EnvironmentType,typename FrameType>
 	struct Implementation {
-		typedef typename FrameType _frame_type;
+		typedef FrameType _frame_type;
 		typedef typename FrameType::_cell_type _cell_type;
 		typedef typename FrameType::_operation_type _operation_type;
 		typedef typename FrameType::_env_type _env_type;
@@ -98,27 +98,27 @@ namespace stackless {
 		const CycleCount cycles_med = 10;
 		const CycleCount cycles_hi = 100;
 
-		typedef unsigned thread_id;
-		extern thread_id thread_counter;
+		typedef unsigned ThreadId;
+		extern ThreadId thread_counter;
 
 		template<typename Implementation>
 		struct Microthread {
-			typedef typename Microthread<Implementation> _thread_type;
+			typedef Microthread<Implementation> _thread_type;
 			typedef typename Implementation::_frame_type _frame_type;
 			typedef typename Implementation::_env_type _env_type;
 			typedef typename std::shared_ptr<Implementation> impl_p;
 
 			Microthread(impl_p implementation, const CycleCount cycle_count = cycles_med)
-				: thread_id(++thread_counter), impl(implementation), cycles(cycle_count) 
+				: thread_id(++thread_counter), impl(implementation), cycles(cycle_count)
 			{
 			}
 
-			const typename thread_id thread_id;
+			const ThreadId thread_id;
 			impl_p impl;
 			CycleCount cycles;
 
-			typename _frame_type &getCurrentFrame() { return impl->getCurrentFrame(); }
-			const typename _frame_type &getCurrentFrame() const { return impl->getCurrentFrame(); }
+			_frame_type &getCurrentFrame() { return impl->getCurrentFrame(); }
+			const _frame_type &getCurrentFrame() const { return impl->getCurrentFrame(); }
 			bool isResolved() { return getCurrentFrame().isResolved(); }
 			typename Implementation::_cell_type getResult() const {
 				const _frame_type &frame = getCurrentFrame();
@@ -156,42 +156,42 @@ namespace stackless {
 
 		template<typename Implementation>
 		struct MicrothreadManager {
-			typedef typename Microthread<Implementation> _thread_type;
+			typedef Microthread<Implementation> _thread_type;
 			typedef typename _thread_type::impl_p impl_p;
 			typedef typename Implementation::_frame_type _frame_type;
 			typedef typename Implementation::_env_type _env_type;
 			typedef typename std::shared_ptr<_frame_type> frame_p;
 			typedef typename std::shared_ptr<_env_type> env_p;
-			typedef typename std::map<thread_id,_thread_type> _threads_type;
-			typedef typename std::pair<thread_id,_thread_type> _threads_ele;
+			typedef typename std::map<ThreadId,_thread_type> _threads_type;
+			typedef typename std::pair<ThreadId,_thread_type> _threads_ele;
 
 			MicrothreadManager() : threads() {
 			}
 
 			template<typename ArgType, class Callback>
-			thread_id start(ArgType args, Callback cb) {
-				_thread_type thread(_thread_type::create<ArgType, Callback>(args, cb));
+			ThreadId start(ArgType args, Callback cb) {
+				_thread_type thread(_thread_type::template create<ArgType, Callback>(args, cb));
 				threads.insert(_threads_ele(thread.thread_id, thread));
 				return thread.thread_id;
 			}
 			template<class Callback>
-			thread_id start(Callback cb) {
-				_thread_type thread(_thread_type::create<Callback>(cb));
+			ThreadId start(Callback cb) {
+				_thread_type thread(_thread_type::template create<Callback>(cb));
 				threads.insert(_threads_ele(thread.thread_id, thread));
 				return thread.thread_id;
 			}
 
-			const _thread_type &getThread(const thread_id index) const {
+			const _thread_type &getThread(const ThreadId index) const {
 				return threads.find(index)->second;
 			}
-			_thread_type &getThread(const thread_id index) {
+			_thread_type &getThread(const ThreadId index) {
 				return threads.find(index)->second;
 			}
-			void remove_thread(const thread_id index) {
+			void remove_thread(const ThreadId index) {
 				threads.erase(threads.find(index));
 			}
 
-			void runThreadToCompletion(const thread_id index, const Threading mode = Single) {
+			void runThreadToCompletion(const ThreadId index, const Threading mode = Single) {
 				_thread_type &thread = threads.find(index)->second;
 				while (!thread.isResolved()) {
 					if(mode == Single)
@@ -232,11 +232,11 @@ namespace stackless {
 		struct Timekeeper
 		{
 			template<class Callback>
-			static __int64 measure(Callback cb) {
+			static unsigned long long measure(Callback cb) {
 				auto start = ClockType::now();
 				cb();
 				auto end = ClockType::now();
-				return std::chrono::duration_cast<typename TimeType>(end - start).count();
+				return std::chrono::duration_cast<TimeType>(end - start).count();
 			}
 		};
 

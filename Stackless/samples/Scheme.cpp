@@ -28,7 +28,7 @@ bool isdig(char c) { return isdigit(static_cast<unsigned char>(c)) != 0; }
 enum cell_type { Symbol, Number, List, Proc, Lambda };
 
 struct environment; // forward declaration; cell and environment reference each other
-typedef std::shared_ptr<typename environment> env_p;
+typedef std::shared_ptr<environment> env_p;
 
 					// a variant that can hold any kind of lisp value
 struct cell {
@@ -64,7 +64,7 @@ namespace instruction {
 }
 
 struct SchemeInstructionConverter
-	: public InstructionConverter<typename cell, typename instruction::instruction> {
+	: public InstructionConverter<cell, typename instruction::instruction> {
 	static _instruction_type convert(_cell_type value) {
 		switch (value.type) {
 			// These two are handled by the Proc dispatcher
@@ -89,8 +89,7 @@ struct SchemeInstructionConverter
 // a dictionary that (a) associates symbols with cells, and
 // (b) can chain to an "outer" dictionary
 struct environment : public Environment<cells> {
-	typedef typename env_p env_p;
-
+	typedef env_p _env_p;
 	environment(env_p outer = nullptr) : outer_(outer) {}
 
 	environment(const cells & parms, const cells & args, env_p outer)
@@ -131,7 +130,7 @@ private:
 };
 
 // frame implementation
-struct SchemeFrame : public Frame<typename cell, typename std::string, typename environment> {
+struct SchemeFrame : public Frame<cell, std::string, environment> {
 private:
 	SchemeFrame(env_p environment)
 		: Frame(environment),
@@ -248,7 +247,8 @@ public:
 		resolved = false;
 		arguments.clear();
 		resolved_arguments.clear();
-		if (resolveExpression(cell(value))) {
+		cell val(value);
+		if (resolveExpression(val)) {
 			arg_it = arguments.cbegin();
 			resolved = true;
 			return;
@@ -538,7 +538,7 @@ SchemeThreadManager SchemeThreadMan;
 
 cell eval(SchemeThreadManager &tm, const cell &ins, env_p env) {
 	// create thread
-	thread_id thread = tm.start([&ins, env]() {
+	ThreadId thread = tm.start([&ins, env]() {
 		SchemeThreadManager::impl_p impl(new SchemeImplementation(ins, env));
 		return impl;
 	});
