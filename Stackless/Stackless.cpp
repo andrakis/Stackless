@@ -26,9 +26,9 @@ namespace references {
 
 int main()
 {
-	implementations::brainfck::BFTest();
-	references::scheme::scheme_complete_test();
-	implementations::scheme::scheme_test();
+	//implementations::brainfck::BFTest();
+	//references::scheme::scheme_complete_test();
+	//implementations::scheme::scheme_test();
 	implementations::scheme::scheme_complete_test();
     return 0;
 }
