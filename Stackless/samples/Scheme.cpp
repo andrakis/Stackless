@@ -17,6 +17,10 @@ using namespace stackless::timekeeping;
 namespace implementations {
 namespace scheme {
 
+void debug(const std::string &message) {
+	std::cerr << "! " << message << std::endl;
+}
+
 // return given mumber as a string
 std::string str(long n) { std::ostringstream os; os << n; return os.str(); }
 
@@ -50,11 +54,14 @@ const cell false_sym(Symbol, "#f");
 const cell true_sym(Symbol, "#t"); // anything that isn't false_sym is true
 const cell nil(Symbol, "nil");
 
+std::string to_string(const cell & exp);
+
 namespace instruction {
 	enum instruction {
 		Quote,
 		If,
 		Set,
+		List,
 		Define,
 		Lambda,
 		Begin,
@@ -75,6 +82,7 @@ struct SchemeInstructionConverter
 			if (value.val == "quote") return instruction::Quote;
 			if (value.val == "if") return instruction::If;
 			if (value.val == "set!") return instruction::Set;
+			if (value.val == "list") return instruction::List;
 			if (value.val == "define") return instruction::Define;
 			if (value.val == "lambda") return instruction::Lambda;
 			if (value.val == "begin") return instruction::Begin;
@@ -155,6 +163,7 @@ public:
 		expressions.push_back(exp);
 		exp_it = expressions.cbegin();
 		setExpression(exp);
+		execute(); // debug
 	}
 
 	enum SubframeMode {
@@ -197,6 +206,7 @@ public:
 				// Copy results
 				cell res(subframe->result);
 				auto mode = subframe_mode;
+				debug("  subframe(" + std::string((mode == Argument ? "arg" : "proc")) + ") = " + to_string(res));
 				// Clear subframe
 				delete subframe;
 				subframe = nullptr;
@@ -222,6 +232,7 @@ public:
 			dispatch();
 		else
 			nextArgument();
+		execute(); // debug
 	}
 
 
@@ -251,6 +262,7 @@ public:
 	}
 
 	void setExpression(const cell &value) {
+		debug("setExpression(" + to_string(value) + ")");
 		resolved = false;
 		arguments.clear();
 		resolved_arguments.clear();
@@ -274,7 +286,14 @@ public:
 				resolved_arguments.push_back(value);
 				return true;
 			}
-			if (value.list[0].type != Symbol) {
+			switch (value.list[0].type) {
+			case List:
+			case Symbol:
+				// Function call. Create frame to execute it.
+				subframe = new SchemeFrame(value, env);
+				subframe_mode = Argument;
+				return false;
+			default:
 				resolved_arguments.push_back(value);
 				return true;
 			}
@@ -283,10 +302,6 @@ public:
 			resolved_arguments.push_back(value);
 			return true;
 		}
-		// Function call. Create frame to execute it.
-		subframe = new SchemeFrame(value, env);
-		subframe_mode = Argument;
-		return false;
 	}
 
 	cell &lookup(const std::string &symbol) {
@@ -308,16 +323,17 @@ public:
 			result = value;
 			return true;
 		case List:
+		{
 			if (value.list.empty()) {
 				result = value;
 				return true;
 			}
-			if (value.list[0].type != Symbol) {
+			//if (value.list[0].type != Symbol) {
 				// Function call
 				// (proc exp*)
-				arguments = cells(value.list.cbegin(), value.list.cend());
-				return false;
-			}
+			//	arguments = cells(value.list.cbegin(), value.list.cend());
+			//	return false;
+			//}
 			auto first = value.list[0].val;
 			// iterator skips first item
 			cells::iterator it = value.list.begin() + 1;
@@ -338,6 +354,9 @@ public:
 						resolved_arguments.push_back(*it);
 					else
 						resolved_arguments.push_back(nil);
+					return false;
+				} else if (first == "list") {
+					arguments = cells(value.list.cbegin(), value.list.cend());
 					return false;
 				} else if (first == "set!") {   // (set! var exp)
 					// var
@@ -364,10 +383,16 @@ public:
 				return false;
 			}
 			// Some other sort of list, unknown.
-			resolved_arguments.push_back(value);
+			//resolved_arguments.push_back(value);
+			arguments = cells(value.list.cbegin(), value.list.cend());
+			exp = cell(Symbol, "list");
+			return false;
+		}
+		default:
+			// Other sort of value
+			result = value;
 			return true;
 		}
-		return true;
 	}
 
 	cell exp;
@@ -403,6 +428,7 @@ template<> struct SchemeDispatcher<instruction::If> {
 				frame.result = if_result;
 			} else {
 				// Update our expression without moving exp it
+				// Create instruction to return list
 				frame.exp = if_result;
 				frame.setExpression(frame.exp);
 				return false;
@@ -413,6 +439,13 @@ template<> struct SchemeDispatcher<instruction::If> {
 			break;
 		}
 		// Move exp_it
+		return true;
+	}
+};
+
+template<> struct SchemeDispatcher<instruction::List> {
+	static bool dispatch(SchemeFrame &frame, cells::const_iterator it) {
+		frame.result = frame.resolved_arguments;
 		return true;
 	}
 };
@@ -461,10 +494,14 @@ template<> struct SchemeDispatcher<instruction::Proc> {
 			// Copy the rest of the resolved arguments to a new list,
 			// that list is passed as the arguments.
 			args = cells(it, frame.resolved_arguments.cend());
-			frame.result = proc.proc(args);
+			//frame.setExpression(proc.proc(args));
+			//frame.result = proc.proc(args);
 			// TODO: Support a proc that waits
-			// Move exp_it
-			return true;
+			// Create subframe
+			frame.subframe_mode = SchemeFrame::Procedure;
+			frame.subframe = new SchemeFrame(proc.proc(args), frame.env);
+			// dont Move exp_it
+			return false;
 		// Lambda: a Scheme procedure
 		// We create a subframe to run the procedure, along with
 		// an environment with arguments set to correct values.
@@ -516,6 +553,8 @@ bool SchemeFrame::dispatchCall() {
 	switch (ins) {
 	case instruction::If:
 		return SchemeDispatcher<instruction::If>::dispatch(*this, it);
+	case instruction::List:
+		return SchemeDispatcher<instruction::List>::dispatch(*this, it);
 	case instruction::Begin:
 		return SchemeDispatcher<instruction::Begin>::dispatch(*this, it);
 	case instruction::Set:
@@ -817,6 +856,13 @@ unsigned do_scheme_complete_test() {
 	TEST("(define zip (combine cons))", "<Lambda>");
 	TEST("(zip (list 1 2 3 4) (list 5 6 7 8))", "((1 5) (2 6) (3 7) (4 8))");
 	return 0;
+	TEST("(define combine (lambda (f)"
+		"(lambda (x y)"
+		"(if (null? x) (quote ())"
+		"(f (list (head x) (head y))"
+		"((combine f) (tail x) (tail y)))))))", "<Lambda>");
+	TEST("(define zip (combine cons))", "<Lambda>");
+	TEST("(zip (list 1 2 3 4) (list 5 6 7 8))", "((1 5) (2 6) (3 7) (4 8))");
 	TEST("(define abs (lambda (n) ((if (> n 0) + -) 0 n)))", "<Lambda>");
 	TEST("(abs -3)", "3");
 	TEST("(list (abs -3) (abs 0) (abs 3))", "(3 0 3)");
