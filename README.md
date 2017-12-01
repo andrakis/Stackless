@@ -18,6 +18,27 @@ Additionally, Stackless aims to provide the following benefits:
 Current Status
 --------------
 
+***Version: 0.45*** **Working (Unoptimized) Stackless Scheme Interpreter**
+
+***Implemented:***
+
+  * Completely working stackless Scheme interpreter
+
+  * Speed is slow at the moment
+
+  * All 29 test cases pass
+
+***TODO:***
+
+  * Move basic logic to Stackless templates
+
+  * Tail-call optimizations
+
+  * Frame use optimization
+
+Changelog
+---------
+
 ***Version: 0.35*** **Work-in-progress Stackless Scheme Interpreter**
 
 ***Implemented:***
@@ -25,9 +46,6 @@ Current Status
   * Basic interpreter. Some arguments are not getting resolved correctly.
 
   * Of 29 test cases, 10 failures occur. Good progress.
-
-Changelog
----------
 
 ***Version: 0.20*** **Cleanup release**
 
