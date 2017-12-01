@@ -18,7 +18,7 @@ namespace implementations {
 namespace scheme {
 
 #if 1
-#define DEBUG()
+#define DEBUG(m)
 #else
 #define DEBUG(m)   std::cerr << "! " << m << std::endl;
 #endif
