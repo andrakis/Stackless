@@ -60,32 +60,6 @@ namespace stackless {
 		CellType result;
 	};
 
-	template<typename EnvironmentType,typename FrameType>
-	struct Implementation {
-		typedef FrameType _frame_type;
-		typedef typename FrameType::_cell_type _cell_type;
-		typedef typename FrameType::_operation_type _operation_type;
-		typedef typename FrameType::_env_type _env_type;
-		typedef typename FrameType::env_p env_p;
-
-		Implementation(env_p _env) : env(_env) {
-		}
-
-		env_p env;
-
-		bool isResolved() {
-			const FrameType &frame = getCurrentFrame();
-			return frame.isArgumentsResolved() && frame.isResolved();
-		}
-		void execute() {
-			FrameType &frame = getCurrentFrame();
-			executeFrame(frame);
-		}
-
-		virtual FrameType &getCurrentFrame() = 0;
-		virtual void executeFrame(FrameType &frame) = 0;
-	};
-
 	namespace microthreading {
 		enum WaitState {
 			Stop = 0,
@@ -101,19 +75,39 @@ namespace stackless {
 		typedef unsigned ThreadId;
 		extern ThreadId thread_counter;
 
+		struct MicrothreadBase {
+			const ThreadId thread_id;
+			virtual bool isResolved() = 0;
+			virtual void execute() = 0;
+			virtual void executeCycle() = 0;
+
+		protected:
+			MicrothreadBase(ThreadId id) : thread_id(id) {
+
+			}
+		};
+
 		template<typename Implementation>
-		struct Microthread {
+		struct Microthread : public MicrothreadBase {
 			typedef Microthread<Implementation> _thread_type;
 			typedef typename Implementation::_frame_type _frame_type;
 			typedef typename Implementation::_env_type _env_type;
 			typedef typename std::shared_ptr<Implementation> impl_p;
 
-			Microthread(impl_p implementation, const CycleCount cycle_count = cycles_med)
-				: thread_id(++thread_counter), impl(implementation), cycles(cycle_count)
+			template<typename Callback, typename Args>
+			Microthread(Callback cb, Args args, const CycleCount cycle_count = cycles_med)
+				: MicrothreadBase(++thread_counter), cycles(cycle_count)
 			{
+				impl = impl_p(cb(args, this));
 			}
 
-			const ThreadId thread_id;
+			template<typename Callback>
+			Microthread(Callback cb, const CycleCount cycle_count = cycles_med)
+				: MicrothreadBase(++thread_counter), cycles(cycle_count)
+			{
+				impl = impl_p(cb(this));
+			}
+
 			impl_p impl;
 			CycleCount cycles;
 
@@ -139,11 +133,11 @@ namespace stackless {
 
 			template<typename ArgType, class Callback>
 			static _thread_type create(ArgType args, Callback cb) {
-				return _thread_type(cb(args));
+				return _thread_type(cb, args);
 			}
 			template<class Callback>
 			static _thread_type create(Callback cb) {
-				return _thread_type(cb());
+				return _thread_type(cb);
 			}
 		};
 		
@@ -212,12 +206,7 @@ namespace stackless {
 					if (thread.isResolved())
 						continue;
 					++threads_run;
-					for (int cycle_count = thread.cycles; cycle_count > 0; --cycle_count) {
-						// Execution cycle
-						if (thread.isResolved())
-							break;
-						thread.execute();
-					}
+					thread.execute();
 				}
 				return threads_run;
 			}
@@ -226,6 +215,39 @@ namespace stackless {
 			_threads_type threads;
 		};
 	}
+
+	template<typename EnvironmentType,typename FrameType>
+	struct Implementation {
+		typedef FrameType _frame_type;
+		typedef typename FrameType::_cell_type _cell_type;
+		typedef typename FrameType::_operation_type _operation_type;
+		typedef typename FrameType::_env_type _env_type;
+		typedef typename FrameType::env_p env_p;
+		typedef typename microthreading::MicrothreadBase MicrothreadBase;
+
+		Implementation(env_p _env) : env(_env) {
+		}
+
+		void setThread(MicrothreadBase *t) {
+			thread = t;
+		}
+
+		env_p env;
+		MicrothreadBase *thread;
+
+		bool isResolved() {
+			const FrameType &frame = getCurrentFrame();
+			return frame.isArgumentsResolved() && frame.isResolved();
+		}
+		void execute() {
+			FrameType &frame = getCurrentFrame();
+			executeFrame(frame);
+		}
+
+		virtual FrameType &getCurrentFrame() = 0;
+		virtual void executeFrame(FrameType &frame) = 0;
+	};
+
 
 	namespace timekeeping {
 		template<typename TimeType, typename ClockType>

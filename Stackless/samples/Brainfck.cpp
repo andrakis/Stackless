@@ -294,7 +294,7 @@ void BFTest() {
 	auto duration = StacklessTimekeeper::measure([&manager, &hello_world]() {
 		// Create a few different instances
 		for (int thread_id = 0; thread_id < 5; ++thread_id) {
-			manager.start<const std::string &>(hello_world, [](auto code) {
+			manager.start<const std::string &>(hello_world, [](auto code, auto thread_ptr) {
 				BFImplementation::env_p env(new BFEnvironment());
 				env->assignCode(code);
 				BFMicrothreadManager::impl_p impl(new BFImplementation(env));
