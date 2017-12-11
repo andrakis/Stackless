@@ -53,7 +53,7 @@ namespace stackless {
 		virtual bool isArgumentsResolved() const = 0;
 
 		//virtual OperationType fetch() = 0;
-		//virtual void execute() = 0;
+		virtual void execute() = 0;
 
 		env_p env;
 
@@ -98,14 +98,14 @@ namespace stackless {
 			Microthread(Callback cb, Args args, const CycleCount cycle_count = cycles_med)
 				: MicrothreadBase(++thread_counter), cycles(cycle_count)
 			{
-				impl = impl_p(cb(args, this));
+				impl = impl_p(cb(args));
 			}
 
 			template<typename Callback>
 			Microthread(Callback cb, const CycleCount cycle_count = cycles_med)
 				: MicrothreadBase(++thread_counter), cycles(cycle_count)
 			{
-				impl = impl_p(cb(this));
+				impl = impl_p(cb());
 			}
 
 			impl_p impl;
@@ -233,17 +233,11 @@ namespace stackless {
 		typedef typename FrameType::_operation_type _operation_type;
 		typedef typename FrameType::_env_type _env_type;
 		typedef typename FrameType::env_p env_p;
-		typedef typename microthreading::MicrothreadBase MicrothreadBase;
 
 		Implementation(env_p _env) : env(_env) {
 		}
 
-		void setThread(MicrothreadBase *t) {
-			thread = t;
-		}
-
 		env_p env;
-		MicrothreadBase *thread;
 
 		bool isResolved() {
 			const FrameType &frame = getCurrentFrame();

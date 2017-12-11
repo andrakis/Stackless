@@ -537,7 +537,7 @@ SchemeThreadManager SchemeThreadMan;
 
 cell eval(SchemeThreadManager &tm, const cell &ins, env_p env) {
 	// create thread
-	ThreadId thread = tm.start([&ins, env](auto thread_tr) {
+	ThreadId thread = tm.start([&ins, env]() {
 		SchemeThreadManager::impl_p impl(new SchemeImplementation(ins, env));
 		return impl;
 	});
