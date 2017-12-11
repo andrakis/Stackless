@@ -53,7 +53,7 @@ namespace stackless {
 		virtual bool isArgumentsResolved() const = 0;
 
 		//virtual OperationType fetch() = 0;
-		virtual void execute() = 0;
+		//virtual void execute() = 0;
 
 		env_p env;
 
@@ -185,12 +185,17 @@ namespace stackless {
 				threads.erase(threads.find(index));
 			}
 
+			void executeThread(_thread_type &thread) {
+				current_thread = &thread;
+				thread.execute();
+			}
+
 			void runThreadToCompletion(const ThreadId index, const Threading mode = Single) {
 				_thread_type &thread = threads.find(index)->second;
 				while (!thread.isResolved()) {
-					if(mode == Single)
+					if (mode == Single)
 						// Run single thread
-						thread.execute();
+						executeThread(thread);
 					else if(mode == Multi) {
 						// Run other threads
 						if (executeThreads() == 0)
@@ -206,13 +211,18 @@ namespace stackless {
 					if (thread.isResolved())
 						continue;
 					++threads_run;
-					thread.execute();
+					executeThread(thread);
 				}
 				return threads_run;
 			}
 
-		private:
+			_thread_type *getCurrentThread() {
+				return current_thread;
+			}
+
+		protected:
 			_threads_type threads;
+			_thread_type *current_thread;
 		};
 	}
 
