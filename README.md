@@ -18,6 +18,12 @@ Additionally, Stackless aims to provide the following benefits:
 Current Status
 --------------
 
+***Version: 0.50*** **Updates for [Elisp](https://github.com/andrakis/PocoLithp)**
+
+***Implemented***:
+
+  * Numerous updates to support Elisp (formerly known as PocoLithp), mostly in the microthreading department.
+
 ***Version: 0.45*** **Working (Unoptimized) Stackless Scheme Interpreter**
 
 ***Implemented:***

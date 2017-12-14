@@ -94,6 +94,9 @@ namespace stackless {
 			typedef typename Implementation::_env_type _env_type;
 			typedef typename std::shared_ptr<Implementation> impl_p;
 
+			// Whether this thread is being watched, and should be cleaned up automatically
+			bool watched = false;
+
 			template<typename Callback, typename Args>
 			Microthread(Callback cb, Args args, const CycleCount cycle_count = cycles_med)
 				: MicrothreadBase(++thread_counter), cycles(cycle_count)
@@ -192,6 +195,7 @@ namespace stackless {
 
 			void runThreadToCompletion(const ThreadId index, const Threading mode = Single) {
 				_thread_type &thread = threads.find(index)->second;
+				thread.watched = true;
 				while (!thread.isResolved()) {
 					if (mode == Single)
 						// Run single thread
@@ -206,13 +210,23 @@ namespace stackless {
 
 			int executeThreads() {
 				int threads_run = 0;
+				bool unwatched_resolved = false;
 				for (auto it = threads.begin(); it != threads.end(); ++it) {
 					_thread_type &thread = it->second;
-					if (thread.isResolved())
+					if (thread.isResolved()) {
+						if(thread.watched == false)
+							unwatched_resolved = true;
 						continue;
+					}
 					++threads_run;
 					executeThread(thread);
+					if (thread.watched == false && thread.isResolved())
+						unwatched_resolved = true;
 				}
+				if(unwatched_resolved)
+					idle();
+				if(threads_run == 0)
+					yield_process();
 				return threads_run;
 			}
 
@@ -221,6 +235,27 @@ namespace stackless {
 			}
 
 		protected:
+			// Idle takes care of cleaning up unwatched processes.
+			// This must be done outside the executeThreads main loop, as it alters
+			// the threads structure, invalidating iterators.
+			virtual void idle() {
+				std::vector<_threads_type::iterator> cleanup_processes;
+				// Find processes to clean up
+				for (auto it = threads.begin(); it != threads.end(); ++it) {
+					_thread_type &thread = it->second;
+					if (thread.watched == false && thread.isResolved())
+						cleanup_processes.push_back(it);
+				}
+				// Clean up the processes we found
+				for (auto it = cleanup_processes.begin(); it != cleanup_processes.end(); ++it) {
+					threads.erase(*it);
+				}
+			}
+			// To avoid maxing out the CPU whilst no threads are doing anything, this
+			// function is called.
+			// Since this can be very implementation-dependant, it does nothing in this template.
+			virtual void yield_process() {
+			}
 			_threads_type threads;
 			_thread_type *current_thread;
 		};
