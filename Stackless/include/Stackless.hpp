@@ -239,7 +239,7 @@ namespace stackless {
 			// This must be done outside the executeThreads main loop, as it alters
 			// the threads structure, invalidating iterators.
 			virtual void idle() {
-				std::vector<_threads_type::iterator> cleanup_processes;
+				std::vector<typename _threads_type::iterator> cleanup_processes;
 				// Find processes to clean up
 				for (auto it = threads.begin(); it != threads.end(); ++it) {
 					_thread_type &thread = it->second;
