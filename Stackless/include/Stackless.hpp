@@ -123,11 +123,7 @@ namespace stackless {
 			}
 
 			void execute() {
-				for (CycleCount cycle = cycles; cycle > 0; --cycle) {
-					if (isResolved())
-						break;
-					executeCycle();
-				}
+				executeCycle();
 			}
 
 			void executeCycle() {
@@ -188,9 +184,17 @@ namespace stackless {
 				threads.erase(threads.find(index));
 			}
 
+			bool shouldRunThread(_thread_type &thread) {
+				return thread.isResolved() || isThreadScheduled(thread);
+			}
+
 			void executeThread(_thread_type &thread) {
 				current_thread = &thread;
-				thread.execute();
+				for (CycleCount cycle = thread.cycles; cycle > 0; --cycle) {
+					if (shouldRunThread(thread) == false)
+						break;
+					thread.execute();
+				}
 			}
 
 			void runThreadToCompletion(const ThreadId index, const Threading mode = Single) {
@@ -202,10 +206,15 @@ namespace stackless {
 						executeThread(thread);
 					else if(mode == Multi) {
 						// Run other threads
-						if (executeThreads() == 0)
+						executeThreads();
+						if(thread.isResolved())
 							break;
 					}
 				}
+			}
+
+			virtual bool isThreadScheduled(const _thread_type &thread) {
+				return true;
 			}
 
 			int executeThreads() {
@@ -218,6 +227,9 @@ namespace stackless {
 							unwatched_resolved = true;
 						continue;
 					}
+					if (isThreadScheduled(thread) == false) {
+						continue;
+					}
 					++threads_run;
 					executeThread(thread);
 					if (thread.watched == false && thread.isResolved())
@@ -225,13 +237,19 @@ namespace stackless {
 				}
 				if(unwatched_resolved)
 					idle();
-				if(threads_run == 0)
-					yield_process();
+				yield_process(unwatched_resolved, threads_run);
 				return threads_run;
 			}
 
 			_thread_type *getCurrentThread() {
 				return current_thread;
+			}
+
+			bool hasThreads() const {
+				return threads.empty() == false;
+			}
+			typename _threads_type::size_type threadCount() const {
+				return threads.size();
 			}
 
 		protected:
@@ -254,7 +272,7 @@ namespace stackless {
 			// To avoid maxing out the CPU whilst no threads are doing anything, this
 			// function is called.
 			// Since this can be very implementation-dependant, it does nothing in this template.
-			virtual void yield_process() {
+			virtual void yield_process(bool unwatched_resolved, int threads_run) {
 			}
 			_threads_type threads;
 			_thread_type *current_thread;
