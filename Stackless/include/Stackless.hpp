@@ -168,6 +168,8 @@ namespace stackless {
 			typedef typename std::shared_ptr<_env_type> env_p;
 			typedef typename std::map<ThreadId,_thread_type> _threads_type;
 			typedef typename std::pair<ThreadId,_thread_type> _threads_ele;
+			typedef typename _threads_type::const_iterator _threads_const_iterator;
+			typedef typename _threads_type::iterator _threads_iterator;
 
 			// Custom type used to manage scheduling set
 			struct SchedulingInformation {
@@ -185,7 +187,7 @@ namespace stackless {
 			};
 			typedef std::set<SchedulingInformation> _scheduling_type;
 
-			MicrothreadManager() : threads(), current_thread(nullptr), scheduling(), thread_counter(0) {
+			MicrothreadManager() : threads(), current_thread(threads.begin()), scheduling(), thread_counter(0) {
 			}
 
 			template<typename ArgType, class Callback>
@@ -203,11 +205,11 @@ namespace stackless {
 				return thread_id;
 			}
 
-			const _thread_type &getThread(const ThreadId index) const {
-				return threads.find(index)->second;
+			const _threads_const_iterator getThread(const ThreadId index) const {
+				return threads.find(index);
 			}
-			_thread_type &getThread(const ThreadId index) {
-				return threads.find(index)->second;
+			_threads_iterator getThread(const ThreadId index) {
+				return threads.find(index);
 			}
 			void remove_thread(const ThreadId index) {
 				threads.erase(threads.find(index));
@@ -225,30 +227,32 @@ namespace stackless {
 				scheduling.emplace(SchedulingInformation(thread_ref, ThreadTimePoint::max()));
 			}
 
-			bool shouldRunThread(_thread_type &thread) {
-				return thread.isResolved() || isThreadScheduled(thread);
+			bool shouldRunThread(_threads_iterator thread) {
+				return thread->second.isResolved() || isThreadScheduled(thread);
 			}
 
-			void executeThread(_thread_type &thread) {
-				current_thread = &thread;
-				for (CycleCount cycle = thread.cycles; cycle > 0; --cycle) {
+			void executeThread(_threads_iterator thread) {
+				current_thread = thread;
+				for (CycleCount cycle = thread->second.cycles; cycle > 0; --cycle) {
 					if (shouldRunThread(thread) == false)
 						break;
-					thread.execute();
+					thread->second.execute();
 				}
 			}
 
 			void runThreadToCompletion(const ThreadId index, const Threading mode = Single) {
-				_thread_type &thread = threads.find(index)->second;
-				thread.watched = true;
-				while (!thread.isResolved()) {
+				_threads_iterator thread = threads.find(index);
+				if (thread == threads.end())
+					return;
+				thread->second.watched = true;
+				while (!thread->second.isResolved()) {
 					if (mode == Single)
 						// Run single thread
 						executeThread(thread);
 					else if(mode == Multi) {
 						// Run other threads
 						executeThreads();
-						if(thread.isResolved())
+						if(thread->second.isResolved())
 							break;
 					}
 				}
@@ -258,18 +262,17 @@ namespace stackless {
 				int threads_run = 0;
 				bool unwatched_resolved = false;
 				for (auto it = threads.begin(); it != threads.end(); ++it) {
-					_thread_type &thread = it->second;
-					if (thread.isResolved()) {
-						if(thread.watched == false)
+					if (it->second.isResolved()) {
+						if(it->second.watched == false)
 							unwatched_resolved = true;
 						continue;
 					}
-					if (isThreadScheduled(thread) == false) {
+					if (isThreadScheduled(it) == false) {
 						continue;
 					}
 					++threads_run;
-					executeThread(thread);
-					if (thread.watched == false && thread.isResolved())
+					executeThread(it);
+					if (it->second.watched == false && it->second.isResolved())
 						unwatched_resolved = true;
 				}
 				if(unwatched_resolved)
@@ -278,7 +281,7 @@ namespace stackless {
 				return threads_run;
 			}
 
-			_thread_type *getCurrentThread() {
+			_threads_iterator getCurrentThread() {
 				return current_thread;
 			}
 
@@ -292,13 +295,16 @@ namespace stackless {
 			// Send a message to a thread.
 			// Returns: true on success, false on thread not existing.
 			bool send(const _cell_type &message, const ThreadId thread_id) {
-				deliver_message(getThread(thread_id), message);
+				auto it = threads.find(thread_id);
+				if (it == threads.end())
+					return false;
+				deliver_message(it, message);
 				return true;
 			}
 
 		protected:
 			// Check if a thread is scheduled to run.
-			bool isThreadScheduled(const _thread_type &thread) {
+			bool isThreadScheduled(_threads_iterator thread) {
 				// Any scheduling information?
 				if (scheduling.empty())
 					return true;
@@ -308,7 +314,7 @@ namespace stackless {
 				for (; it != scheduling.cend(); ++it) {
 					const SchedulingInformation &info = *it;
 					// TODO: This deep check should be moved elsewhere
-					if (info.thread_id == thread.thread_id) {
+					if (info.thread_id == thread->second.thread_id) {
 						break;
 					}
 				}
@@ -334,8 +340,7 @@ namespace stackless {
 				std::vector<typename _threads_type::iterator> cleanup_processes;
 				// Find processes to clean up
 				for (auto it = threads.begin(); it != threads.end(); ++it) {
-					_thread_type &thread = it->second;
-					if (thread.watched == false && thread.isResolved())
+					if (it->second.watched == false && it->second.isResolved())
 						cleanup_processes.push_back(it);
 				}
 				// Clean up the processes we found
@@ -349,12 +354,12 @@ namespace stackless {
 			virtual void yield_process(bool unwatched_resolved, int threads_run) {
 			}
 			_threads_type threads;
-			_thread_type *current_thread;
+			_threads_iterator current_thread;
 			_scheduling_type scheduling;
 			ThreadId thread_counter;
 			// Default behaviour
-			virtual void deliver_message(_thread_type &thread, const _cell_type &message) {
-				thread.mailbox.push(message);
+			virtual void deliver_message(_threads_iterator thread, const _cell_type &message) {
+				thread->second.mailbox.push(message);
 			}
 		};
 
