@@ -75,6 +75,11 @@ namespace stackless {
 		const CycleCount cycles_hi = 100;
 
 		typedef unsigned ThreadId;
+		// We use steady clock for thread scheduling as scheduling should
+		// not change when time changes.
+		using ThreadClock = std::chrono::steady_clock;
+		using ThreadTimePoint = std::chrono::steady_clock::time_point;
+		using ThreadTimeUnit = std::chrono::milliseconds;
 
 		struct MicrothreadBase {
 			const ThreadId thread_id;
@@ -103,6 +108,7 @@ namespace stackless {
 			impl_p impl;
 			CycleCount cycles;
 			_mailbox_type mailbox;
+			ThreadTimePoint sleep_until = ThreadTimePoint::min();
 
 			template<typename Callback, typename Args>
 			Microthread(Callback cb, Args args, const ThreadId thread_id, const CycleCount cycle_count = cycles_med)
@@ -150,12 +156,6 @@ namespace stackless {
 			// Execute multiple threads
 			Multi
 		};
-
-		// We use steady clock for thread scheduling as scheduling should
-		// not change when time changes.
-		using ThreadClock = std::chrono::steady_clock;
-		using ThreadTimePoint = std::chrono::steady_clock::time_point;
-		using ThreadTimeUnit = std::chrono::milliseconds;
 
 		template<typename Implementation>
 		struct MicrothreadManager {
@@ -221,10 +221,12 @@ namespace stackless {
 				ThreadTimePoint now = ThreadClock::now();
 				ThreadTimePoint target = now + duration;
 				scheduling.emplace(SchedulingInformation(thread_ref, target));
+				getThread(thread_ref)->second.sleep_until = target;
 			}
 			void thread_sleep_forever(const ThreadId thread_ref) {
 				// TODO: Clear any existing timeouts?
 				scheduling.emplace(SchedulingInformation(thread_ref, ThreadTimePoint::max()));
+				getThread(thread_ref)->second.sleep_until = ThreadTimePoint::max();
 			}
 
 			bool shouldRunThread(_threads_iterator thread) {
