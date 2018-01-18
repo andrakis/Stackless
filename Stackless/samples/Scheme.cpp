@@ -522,8 +522,9 @@ struct SchemeImplementation : public Implementation<environment, SchemeFrame> {
 	SchemeFrame &getCurrentFrame() {
 		return frame;
 	}
-	void executeFrame(SchemeFrame &fr) {
+	bool executeFrame(SchemeFrame &fr) {
 		fr.execute();
+		return true;
 	}
 private:
 	SchemeFrame frame;

@@ -84,8 +84,8 @@ namespace stackless {
 		struct MicrothreadBase {
 			const ThreadId thread_id;
 			virtual bool isResolved() = 0;
-			virtual void execute() = 0;
-			virtual void executeCycle() = 0;
+			virtual bool execute() = 0;
+			virtual bool executeCycle() = 0;
 
 		protected:
 			MicrothreadBase(ThreadId id) : thread_id(id) {
@@ -132,12 +132,12 @@ namespace stackless {
 				return frame.result;
 			}
 
-			void execute() {
-				executeCycle();
+			bool execute() {
+				return executeCycle();
 			}
 
-			void executeCycle() {
-				impl->execute();
+			bool executeCycle() {
+				return impl->execute();
 			}
 
 			template<typename ArgType, class Callback>
@@ -212,6 +212,7 @@ namespace stackless {
 				return threads.find(index);
 			}
 			void remove_thread(const ThreadId index) {
+				thread_wake(index);
 				threads.erase(threads.find(index));
 			}
 
@@ -228,18 +229,25 @@ namespace stackless {
 				scheduling.emplace(SchedulingInformation(thread_ref, ThreadTimePoint::max()));
 				getThread(thread_ref)->second.sleep_until = ThreadTimePoint::max();
 			}
+			void thread_wake(const ThreadId thread_ref) {
+				auto it = getSchedulingFor(getThread(thread_ref));
+				if (it != scheduling.end())
+					scheduling.erase(*it);
+			}
 
 			bool shouldRunThread(_threads_iterator thread) {
 				return thread->second.isResolved() || isThreadScheduled(thread);
 			}
 
-			void executeThread(_threads_iterator thread) {
+			bool executeThread(_threads_iterator thread) {
 				current_thread = thread;
+				bool executed = false;
 				for (CycleCount cycle = thread->second.cycles; cycle > 0; --cycle) {
 					if (shouldRunThread(thread) == false)
-						break;
-					thread->second.execute();
+						return executed;
+					executed = executed || thread->second.execute();
 				}
+				return executed;
 			}
 
 			void runThreadToCompletion(const ThreadId index, const Threading mode = Single) {
@@ -272,8 +280,8 @@ namespace stackless {
 					if (isThreadScheduled(it) == false) {
 						continue;
 					}
-					++threads_run;
-					executeThread(it);
+					if(executeThread(it))
+						++threads_run;
 					if (it->second.watched == false && it->second.isResolved())
 						unwatched_resolved = true;
 				}
@@ -305,12 +313,7 @@ namespace stackless {
 			}
 
 		protected:
-			// Check if a thread is scheduled to run.
-			bool isThreadScheduled(_threads_iterator thread) {
-				// Any scheduling information?
-				if (scheduling.empty())
-					return true;
-
+			typename _scheduling_type::iterator getSchedulingFor(_threads_iterator thread) {
 				// Find iterator for scheduling info for this thread
 				auto it = scheduling.cbegin();
 				for (; it != scheduling.cend(); ++it) {
@@ -320,7 +323,17 @@ namespace stackless {
 						break;
 					}
 				}
-				// Found?
+				return it;
+			}
+
+			// Check if a thread is scheduled to run.
+			bool isThreadScheduled(_threads_iterator thread) {
+				// Any scheduling information?
+				if (scheduling.empty())
+					return true;
+
+				auto it = getSchedulingFor(thread);
+				// Any scheduling information?
 				if(it == scheduling.cend())
 					return true;
 
@@ -342,8 +355,10 @@ namespace stackless {
 				std::vector<typename _threads_type::iterator> cleanup_processes;
 				// Find processes to clean up
 				for (auto it = threads.begin(); it != threads.end(); ++it) {
-					if (it->second.watched == false && it->second.isResolved())
+					if (it->second.watched == false && it->second.isResolved()) {
+						thread_wake(it->second.thread_id);
 						cleanup_processes.push_back(it);
+					}
 				}
 				// Clean up the processes we found
 				for (auto it = cleanup_processes.begin(); it != cleanup_processes.end(); ++it) {
@@ -386,13 +401,13 @@ namespace stackless {
 			const FrameType &frame = getCurrentFrame();
 			return frame.isArgumentsResolved() && frame.isResolved();
 		}
-		void execute() {
+		bool execute() {
 			FrameType &frame = getCurrentFrame();
-			executeFrame(frame);
+			return executeFrame(frame);
 		}
 
 		virtual FrameType &getCurrentFrame() = 0;
-		virtual void executeFrame(FrameType &frame) = 0;
+		virtual bool executeFrame(FrameType &frame) = 0;
 
 		virtual void EVENT_Receive(const _cell_type &message) {
 			if (false == onMessage(message))
