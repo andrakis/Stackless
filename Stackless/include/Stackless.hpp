@@ -148,6 +148,21 @@ namespace stackless {
 			static _thread_type create(Callback cb, const ThreadId thread_id, const CycleCount cycle_count = cycles_med) {
 				return _thread_type(cb, thread_id, cycle_count);
 			}
+
+
+			void deliver_message(const _cell_type &message) {
+				if (false == impl->deliver_message(message)) {
+					// Not handled, add it to mailbox
+					mailbox.push(message);
+				}
+			}
+
+			void notify_sleep() {
+				impl->notify_sleep();
+			}
+			void notify_wake() {
+				impl->notify_wake();
+			}
 		};
 		
 		enum Threading {
@@ -211,28 +226,39 @@ namespace stackless {
 			_threads_iterator getThread(const ThreadId index) {
 				return threads.find(index);
 			}
-			void remove_thread(const ThreadId index) {
-				thread_wake(index);
-				threads.erase(threads.find(index));
+			void thread_remove_scheduling(_threads_iterator thread) {
+				auto it = getSchedulingFor(thread);
+				if (it != scheduling.end()) {
+					scheduling.erase(*it);
+				}
+			}
+			void remove_thread(const ThreadId thread_ref) {
+				auto thread = getThread(thread_ref);
+				thread_remove_scheduling(thread);
+				threads.erase(thread);
 			}
 
 			// Sleep for duration from current time
 			void thread_sleep_for(const ThreadId thread_ref, const ThreadTimeUnit &duration) {
-				// TODO: Clear any existing timeouts?
 				ThreadTimePoint now = ThreadClock::now();
 				ThreadTimePoint target = now + duration;
+				auto thread = getThread(thread_ref);
+				thread_remove_scheduling(thread);
 				scheduling.emplace(SchedulingInformation(thread_ref, target));
-				getThread(thread_ref)->second.sleep_until = target;
+				thread->second.sleep_until = target;
+				thread->second.notify_sleep();
 			}
 			void thread_sleep_forever(const ThreadId thread_ref) {
-				// TODO: Clear any existing timeouts?
+				auto thread = getThread(thread_ref);
+				thread_remove_scheduling(thread);
 				scheduling.emplace(SchedulingInformation(thread_ref, ThreadTimePoint::max()));
-				getThread(thread_ref)->second.sleep_until = ThreadTimePoint::max();
+				thread->second.sleep_until = ThreadTimePoint::max();
+				thread->second.notify_sleep();
 			}
 			void thread_wake(const ThreadId thread_ref) {
-				auto it = getSchedulingFor(getThread(thread_ref));
-				if (it != scheduling.end())
-					scheduling.erase(*it);
+				auto thread = getThread(thread_ref);
+				thread_remove_scheduling(thread);
+				thread->second.notify_wake();
 			}
 
 			bool shouldRunThread(_threads_iterator thread) {
@@ -245,7 +271,9 @@ namespace stackless {
 				for (CycleCount cycle = thread->second.cycles; cycle > 0; --cycle) {
 					if (shouldRunThread(thread) == false)
 						return executed;
-					executed = executed || thread->second.execute();
+					if (!thread->second.execute())
+						return executed;
+					executed = true;
 				}
 				return executed;
 			}
@@ -343,6 +371,7 @@ namespace stackless {
 				if (info.time_point <= now) {
 					// Thread has reached schedule time, remove schedule info
 					scheduling.erase(it);
+					thread->second.notify_wake();
 					return true;
 				}
 				// Thread has not reached schedule
@@ -356,7 +385,7 @@ namespace stackless {
 				// Find processes to clean up
 				for (auto it = threads.begin(); it != threads.end(); ++it) {
 					if (it->second.watched == false && it->second.isResolved()) {
-						thread_wake(it->second.thread_id);
+						thread_remove_scheduling(it);
 						cleanup_processes.push_back(it);
 					}
 				}
@@ -374,9 +403,8 @@ namespace stackless {
 			_threads_iterator current_thread;
 			_scheduling_type scheduling;
 			ThreadId thread_counter;
-			// Default behaviour
-			virtual void deliver_message(_threads_iterator thread, const _cell_type &message) {
-				thread->second.mailbox.push(message);
+			void deliver_message(_threads_iterator thread, const _cell_type &message) {
+				thread->second.deliver_message(message);
 			}
 		};
 
@@ -389,13 +417,11 @@ namespace stackless {
 		typedef typename FrameType::_operation_type _operation_type;
 		typedef typename FrameType::_env_type _env_type;
 		typedef typename FrameType::env_p env_p;
-		typedef std::queue<typename FrameType::_cell_type> _mailbox_type;
 
-		Implementation(env_p _env) : env(_env), mailbox() {
+		Implementation(env_p _env) : env(_env) {
 		}
 
 		env_p env;
-		_mailbox_type mailbox;
 
 		bool isResolved() {
 			const FrameType &frame = getCurrentFrame();
@@ -409,16 +435,17 @@ namespace stackless {
 		virtual FrameType &getCurrentFrame() = 0;
 		virtual bool executeFrame(FrameType &frame) = 0;
 
-		virtual void EVENT_Receive(const _cell_type &message) {
-			if (false == onMessage(message))
-				mailbox.push(message);
-		}
-
-		virtual bool onMessage(const _cell_type &message) {
-			std::cerr << "(STUB) Implementation::onMessage" << std::endl;
+		virtual bool deliver_message(const _cell_type &message) {
+			// Default behaviour: return false to signal not handled.
 			return false;
 		}
 
+		virtual void notify_sleep() {
+			// Does nothing by default
+		}
+		virtual void notify_wake() {
+			// Does nothing by default
+		}
 	};
 
 
