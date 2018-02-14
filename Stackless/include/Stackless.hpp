@@ -109,6 +109,7 @@ namespace stackless {
 			CycleCount cycles;
 			_mailbox_type mailbox;
 			ThreadTimePoint sleep_until = ThreadTimePoint::min();
+			bool sleeping = false;
 
 			template<typename Callback, typename Args>
 			Microthread(Callback cb, Args args, const ThreadId thread_id, const CycleCount cycle_count = cycles_med)
@@ -137,7 +138,13 @@ namespace stackless {
 			}
 
 			bool executeCycle() {
-				return impl->execute();
+				if (sleeping) {
+					//std::cerr << "executeCycle() abort due to sleeping" << std::endl;
+					return false;
+				}
+				//return
+				impl->execute();
+				return true;
 			}
 
 			template<typename ArgType, class Callback>
@@ -158,9 +165,11 @@ namespace stackless {
 			}
 
 			void notify_sleep() {
+				sleeping = true;
 				impl->notify_sleep();
 			}
 			void notify_wake() {
+				sleeping = false;
 				impl->notify_wake();
 			}
 		};
@@ -242,6 +251,11 @@ namespace stackless {
 			void thread_sleep_for(const ThreadId thread_ref, const ThreadTimeUnit &duration) {
 				ThreadTimePoint now = ThreadClock::now();
 				ThreadTimePoint target = now + duration;
+#ifdef SCHEDULING_DEBUG
+				std::cerr << "sleep, now=" << now.time_since_epoch().count();
+				std::cerr << ", target=" << target.time_since_epoch().count();
+				std::cerr << ", diff=" << (target - now).count() << std::endl;
+#endif
 				auto thread = getThread(thread_ref);
 				thread_remove_scheduling(thread);
 				scheduling.emplace(SchedulingInformation(thread_ref, target));
@@ -362,13 +376,21 @@ namespace stackless {
 
 				auto it = getSchedulingFor(thread);
 				// Any scheduling information?
-				if(it == scheduling.cend())
+				if(it == scheduling.end())
 					return true;
 
 				// Check if reached schedule time
 				ThreadTimePoint now = ThreadClock::now();
 				const SchedulingInformation &info = *it;
+
 				if (info.time_point <= now) {
+#ifdef SCHEDULING_DEBUG
+					std::cerr << "Waking time: now(";
+					std::cerr << now.time_since_epoch().count();
+					std::cerr << ") is past thread wake time: ";
+					std::cerr << info.time_point.time_since_epoch().count();
+					std::cerr << std::endl;
+#endif
 					// Thread has reached schedule time, remove schedule info
 					scheduling.erase(it);
 					thread->second.notify_wake();
