@@ -138,8 +138,9 @@ struct BFImplementation : public Implementation<BFEnvironment,BFFrame> {
 	BFFrame &getCurrentFrame() {
 		return frame;
 	}
-	void executeFrame(BFFrame &frame) {
+	bool executeFrame(BFFrame &frame) {
 		frame.dispatch();
+		return true;
 	}
 private:
 	BFFrame frame;

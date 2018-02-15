@@ -522,8 +522,9 @@ struct SchemeImplementation : public Implementation<environment, SchemeFrame> {
 	SchemeFrame &getCurrentFrame() {
 		return frame;
 	}
-	void executeFrame(SchemeFrame &fr) {
+	bool executeFrame(SchemeFrame &fr) {
 		fr.execute();
+		return true;
 	}
 private:
 	SchemeFrame frame;
@@ -544,7 +545,8 @@ cell eval(SchemeThreadManager &tm, const cell &ins, env_p env) {
 	// execute multithreading until thread resolved
 	tm.runThreadToCompletion(thread);
 	// return frame result
-	cell result = tm.getThread(thread).getResult();
+	auto it = tm.getThread(thread);
+	cell result = it->second.getResult();
 	// Remove thread
 	tm.remove_thread(thread);
 	return result;
